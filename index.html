@@ -330,6 +330,10 @@
                     <label>旋轉角度 (度)</label>
                     <input type="number" id="prop-rotate" min="0" max="360" value="0" oninput="updateSelectedElement()">
                 </div>
+                <div class="btn-group" style="margin-top:10px;">
+                    <button class="btn" onclick="copySelectedElement()">📋 複製</button>
+                    <button class="btn" onclick="pasteElement()">📄 貼上</button>
+                </div>
                 <button class="btn btn-danger" style="margin-top:10px;" onclick="deleteSelectedElement()">🗑️ 刪除元件</button>
             </div>
         </div>
@@ -370,7 +374,10 @@
                     <div class="legend-color" style="background:#fef3c7; border:1px solid #d97706;"></div> 舞台
                 </div>
             </div>
-            <button class="btn" onclick="clearCanvas()">🧹 清空畫布</button>
+            <div style="display:flex; gap:8px;">
+                <button class="btn" onclick="pasteElement()" title="快捷鍵 Ctrl/Cmd + V">📄 貼上 (Ctrl+V)</button>
+                <button class="btn" onclick="clearCanvas()">🧹 清空畫布</button>
+            </div>
         </div>
 
         <div class="canvas-area">
@@ -385,6 +392,30 @@
         let elements = [];
         let selectedId = null;
         let elementCounter = { table: 1, pillar: 1, stage: 1, wall: 1 };
+
+        // 🎨 記憶各類型桌子上一次使用的顏色
+        let lastTableColor = { 'table-round': '#e3f2fd', 'table-rect': '#e8f5e9' };
+
+        function loadLastTableColors() {
+            try {
+                const raw = localStorage.getItem('venueLastTableColors');
+                if (raw) {
+                    const saved = JSON.parse(raw);
+                    lastTableColor = Object.assign({}, lastTableColor, saved);
+                }
+            } catch (e) { /* 忽略讀取錯誤，使用預設值 */ }
+        }
+
+        function rememberTableColor(type, color) {
+            lastTableColor[type] = color;
+            try {
+                localStorage.setItem('venueLastTableColors', JSON.stringify(lastTableColor));
+            } catch (e) { /* 儲存失敗時不影響操作 */ }
+        }
+
+        // 📋 複製 / 貼上元件
+        let clipboardElement = null;
+        let pasteCount = 0;
 
         // 新增元件
         function addElement(type) {
@@ -414,12 +445,12 @@
                 newEl.label = '桌 ' + elementCounter.table++;
                 newEl.width = 90;
                 newEl.height = 90;
-                newEl.color = '#e3f2fd';
+                newEl.color = lastTableColor['table-round'] || '#e3f2fd';
             } else if (type === 'table-rect') {
                 newEl.label = '桌 ' + elementCounter.table++;
                 newEl.width = 120;
                 newEl.height = 70;
-                newEl.color = '#e8f5e9';
+                newEl.color = lastTableColor['table-rect'] || '#e8f5e9';
             } else if (type === 'stage') {
                 newEl.label = '主舞台';
                 newEl.width = 300;
@@ -565,6 +596,7 @@
                 item.rotate = parseInt(document.getElementById('prop-rotate').value) || 0;
                 if (item.type.startsWith('table-')) {
                     item.color = document.getElementById('prop-color').value;
+                    rememberTableColor(item.type, item.color);
                 }
                 renderElements();
             }
@@ -578,6 +610,62 @@
             document.getElementById('no-selection').style.display = 'block';
             document.getElementById('property-editor').style.display = 'none';
         }
+
+        // 📋 複製目前選取的元件
+        function copySelectedElement() {
+            if (!selectedId) {
+                alert('請先點選要複製的元件');
+                return;
+            }
+            const item = elements.find(el => el.id === selectedId);
+            if (item) {
+                clipboardElement = JSON.parse(JSON.stringify(item));
+                pasteCount = 0;
+            }
+        }
+
+        // 📄 貼上剪貼簿中的元件（可重複貼上，每次會些微偏移位置）
+        function pasteElement() {
+            if (!clipboardElement) {
+                alert('尚未複製任何元件，請先選取元件並複製');
+                return;
+            }
+            pasteCount++;
+            const offset = 20 * pasteCount;
+            const newId = 'el_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+            const newEl = JSON.parse(JSON.stringify(clipboardElement));
+            newEl.id = newId;
+            newEl.x = Math.max(0, Math.min(stage.clientWidth - newEl.width, newEl.x + offset));
+            newEl.y = Math.max(0, Math.min(stage.clientHeight - newEl.height, newEl.y + offset));
+
+            // 若是有編號的類型，順便更新對應計數器並附加提示文字，方便辨識
+            if (newEl.type.startsWith('table-')) {
+                newEl.label = newEl.label ? newEl.label + '_copy' : ('桌 ' + elementCounter.table++);
+            } else if (newEl.type.startsWith('pillar-')) {
+                newEl.label = newEl.label ? newEl.label + '_copy' : ('柱 ' + elementCounter.pillar++);
+            }
+
+            elements.push(newEl);
+            renderElements();
+            selectElement(newId);
+        }
+
+        // 鍵盤快捷鍵：Ctrl/Cmd + C 複製、Ctrl/Cmd + V 貼上（輸入框編輯時不觸發）
+        document.addEventListener('keydown', (e) => {
+            const tag = (document.activeElement && document.activeElement.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            const isCopy = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c';
+            const isPaste = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v';
+
+            if (isCopy) {
+                e.preventDefault();
+                copySelectedElement();
+            } else if (isPaste) {
+                e.preventDefault();
+                pasteElement();
+            }
+        });
 
         function clearCanvas() {
             if (confirm('確定要清空所有場地位件嗎？')) {
@@ -671,6 +759,7 @@
 
         // 啟動畫布：預設為空白，若瀏覽器有已儲存的佈局則自動載入
         window.onload = () => {
+            loadLastTableColors();
             const raw = localStorage.getItem('venueLayoutData');
             if (raw) {
                 try {
