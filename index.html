@@ -272,20 +272,23 @@
 </head>
 <body>
 
+    <!-- 隱藏的檔案讀取 input -->
+    <input type="file" id="json-file-input" accept=".json" style="display:none;" onchange="handleJSONFileSelect(event)">
+
     <!-- 左側面板 -->
     <div class="sidebar">
         <div class="sidebar-header">🏛️ 場地配置工具</div>
 
-        <!-- 柱子類別（新增） -->
+        <!-- 柱子類別 -->
         <div class="section">
-            <div class="section-title">🧱 柱子元件（新增）</div>
+            <div class="section-title">🧱 柱子元件</div>
             <div class="btn-group">
                 <button class="btn" onclick="addElement('pillar-square')">⬛ 方柱</button>
                 <button class="btn" onclick="addElement('pillar-round')">⚪ 圓柱</button>
             </div>
         </div>
 
-        <!-- 桌子類別（無人數） -->
+        <!-- 桌子類別 -->
         <div class="section">
             <div class="section-title">🍽️ 桌子元件（不含人數）</div>
             <div class="btn-group">
@@ -338,18 +341,18 @@
             </div>
         </div>
 
-        <!-- 儲存與載入 -->
+        <!-- 儲存與載入 JSON 檔案（升級） -->
         <div class="section">
-            <div class="section-title">💾 佈局儲存</div>
+            <div class="section-title">💾 佈局備份與載入 (JSON)</div>
             <div class="btn-group">
-                <button class="btn btn-success" onclick="saveLayout()">💾 儲存佈局</button>
-                <button class="btn" onclick="loadLayout()">📂 載入佈局</button>
+                <button class="btn btn-success" onclick="exportJSON()">💾 匯出 JSON 檔</button>
+                <button class="btn" onclick="importJSON()">📂 載入 JSON 檔</button>
             </div>
         </div>
 
-        <!-- 匯出與儲存 -->
+        <!-- 檔案匯出 -->
         <div class="section">
-            <div class="section-title">📤 檔案匯出</div>
+            <div class="section-title">📤 圖檔與文件匯出</div>
             <div class="btn-group">
                 <button class="btn btn-primary" onclick="exportAsJPG()">🖼️ 匯出 JPG</button>
                 <button class="btn btn-success" onclick="exportAsPDF()">📄 匯出 PDF</button>
@@ -393,7 +396,6 @@
         let selectedId = null;
         let elementCounter = { table: 1, pillar: 1, stage: 1, wall: 1 };
 
-        // 🎨 記憶各類型桌子上一次使用的顏色
         let lastTableColor = { 'table-round': '#e3f2fd', 'table-rect': '#e8f5e9' };
 
         function loadLastTableColors() {
@@ -403,21 +405,19 @@
                     const saved = JSON.parse(raw);
                     lastTableColor = Object.assign({}, lastTableColor, saved);
                 }
-            } catch (e) { /* 忽略讀取錯誤，使用預設值 */ }
+            } catch (e) {}
         }
 
         function rememberTableColor(type, color) {
             lastTableColor[type] = color;
             try {
                 localStorage.setItem('venueLastTableColors', JSON.stringify(lastTableColor));
-            } catch (e) { /* 儲存失敗時不影響操作 */ }
+            } catch (e) {}
         }
 
-        // 📋 複製 / 貼上元件
         let clipboardElement = null;
         let pasteCount = 0;
 
-        // 新增元件
         function addElement(type) {
             const id = 'el_' + Date.now();
             let newEl = {
@@ -432,7 +432,6 @@
                 color: null
             };
 
-            // 根據類型給予預設值與名稱（無人數）
             if (type === 'pillar-square') {
                 newEl.label = '柱 ' + elementCounter.pillar++;
                 newEl.width = 60;
@@ -466,7 +465,6 @@
             selectElement(id);
         }
 
-        // 輔助函式：將 hex 顏色加深/加亮，用於自動產生邊框顏色
         function shadeColor(hex, percent) {
             hex = hex.replace('#', '');
             if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
@@ -480,7 +478,6 @@
             return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
         }
 
-        // 渲染畫布元件
         function renderElements() {
             stage.innerHTML = '';
             elements.forEach(item => {
@@ -495,13 +492,11 @@
                 el.style.height = item.height + 'px';
                 el.style.transform = `rotate(${item.rotate}deg)`;
 
-                // 若為桌子且有自訂顏色，套用自訂背景與邊框顏色
                 if (item.type.startsWith('table-') && item.color) {
                     el.style.background = item.color;
                     el.style.borderColor = shadeColor(item.color, -30);
                 }
 
-                // 綁定點擊事件與拖曳事件
                 el.addEventListener('mousedown', (e) => startDrag(e, item.id));
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -512,7 +507,6 @@
             });
         }
 
-        // 拖曳邏輯
         let isDragging = false;
         let dragOffset = { x: 0, y: 0 };
 
@@ -532,7 +526,6 @@
             if (!isDragging || !selectedId) return;
             const item = elements.find(el => el.id === selectedId);
             if (item) {
-                // 限制在畫布範圍內
                 let newX = e.clientX - dragOffset.x;
                 let newY = e.clientY - dragOffset.y;
 
@@ -551,7 +544,6 @@
             document.removeEventListener('mouseup', stopDrag);
         }
 
-        // 選擇與屬性更新
         function selectElement(id) {
             selectedId = id;
             renderElements();
@@ -566,7 +558,6 @@
                 document.getElementById('prop-height').value = item.height;
                 document.getElementById('prop-rotate').value = item.rotate || 0;
 
-                // 顏色設定僅限桌子類型顯示
                 const colorGroup = document.getElementById('prop-color-group');
                 if (item.type.startsWith('table-')) {
                     colorGroup.style.display = 'block';
@@ -611,7 +602,6 @@
             document.getElementById('property-editor').style.display = 'none';
         }
 
-        // 📋 複製目前選取的元件
         function copySelectedElement() {
             if (!selectedId) {
                 alert('請先點選要複製的元件');
@@ -624,7 +614,6 @@
             }
         }
 
-        // 📄 貼上剪貼簿中的元件（可重複貼上，每次會些微偏移位置）
         function pasteElement() {
             if (!clipboardElement) {
                 alert('尚未複製任何元件，請先選取元件並複製');
@@ -638,7 +627,6 @@
             newEl.x = Math.max(0, Math.min(stage.clientWidth - newEl.width, newEl.x + offset));
             newEl.y = Math.max(0, Math.min(stage.clientHeight - newEl.height, newEl.y + offset));
 
-            // 若是有編號的類型，順便更新對應計數器並附加提示文字，方便辨識
             if (newEl.type.startsWith('table-')) {
                 newEl.label = newEl.label ? newEl.label + '_copy' : ('桌 ' + elementCounter.table++);
             } else if (newEl.type.startsWith('pillar-')) {
@@ -650,7 +638,6 @@
             selectElement(newId);
         }
 
-        // 鍵盤快捷鍵：Ctrl/Cmd + C 複製、Ctrl/Cmd + V 貼上（輸入框編輯時不觸發）
         document.addEventListener('keydown', (e) => {
             const tag = (document.activeElement && document.activeElement.tagName) || '';
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -677,40 +664,61 @@
             }
         }
 
-        // 💾 儲存佈局功能（存入瀏覽器 localStorage）
-        function saveLayout() {
-            try {
-                const data = { elements, elementCounter, savedAt: new Date().toISOString() };
-                localStorage.setItem('venueLayoutData', JSON.stringify(data));
-                alert('✅ 佈局已儲存！下次開啟此頁面時會自動載入。');
-            } catch (e) {
-                alert('❌ 儲存失敗：' + e.message);
-            }
+        // 💾 匯出 JSON 檔案至電腦
+        function exportJSON() {
+            const data = {
+                version: "1.0",
+                exportTime: new Date().toISOString(),
+                elementCounter: elementCounter,
+                elements: elements
+            };
+
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.download = `venue_layout_${new Date().toISOString().slice(0,10)}.json`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
         }
 
-        // 📂 載入已儲存的佈局
-        function loadLayout() {
-            const raw = localStorage.getItem('venueLayoutData');
-            if (!raw) {
-                alert('⚠️ 目前尚無已儲存的佈局');
-                return;
-            }
-            try {
-                const data = JSON.parse(raw);
-                elements = data.elements || [];
-                elementCounter = data.elementCounter || { table: 1, pillar: 1, stage: 1, wall: 1 };
-                selectedId = null;
-                renderElements();
-                document.getElementById('property-editor').style.display = 'none';
-                alert('✅ 已載入儲存的佈局！');
-            } catch (e) {
-                alert('❌ 載入失敗：' + e.message);
-            }
+        // 📂 觸發讀取 JSON 檔案視窗
+        function importJSON() {
+            document.getElementById('json-file-input').click();
+        }
+
+        // 處理選擇的 JSON 檔案並還原至畫布
+        function handleJSONFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data && Array.isArray(data.elements)) {
+                        elements = data.elements;
+                        elementCounter = data.elementCounter || { table: 1, pillar: 1, stage: 1, wall: 1 };
+                        selectedId = null;
+                        renderElements();
+                        document.getElementById('property-editor').style.display = 'none';
+                        alert('✅ 成功載入 JSON 佈局檔案！');
+                    } else {
+                        alert('❌ JSON 檔案格式不符合佈局規範');
+                    }
+                } catch (err) {
+                    alert('❌ 解析 JSON 檔案失敗：' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            // 清空 value 確保同檔名可重複觸發 onchange
+            event.target.value = '';
         }
 
         // 🖼️ 匯出 JPG 功能
         function exportAsJPG() {
-            // 先取消選取狀態以防選取框一同導出
             const prevSelected = selectedId;
             selectedId = null;
             renderElements();
@@ -721,7 +729,6 @@
                 link.href = canvas.toDataURL('image/jpeg', 0.9);
                 link.click();
 
-                // 還原選取
                 selectedId = prevSelected;
                 renderElements();
             });
@@ -737,13 +744,10 @@
                 const imgData = canvas.toDataURL('image/jpeg', 1.0);
                 const { jsPDF } = window.jspdf;
                 
-                // 建立 A4 直式文件
                 const pdf = new jsPDF('portrait', 'mm', 'a4');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-
-                // 計算圖片等比例縮放居中
-                const imgWidth = pdfWidth - 20; // 左右留白 10mm
+                
+                const imgWidth = pdfWidth - 20;
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
                 pdf.setFontSize(16);
@@ -757,19 +761,8 @@
             });
         }
 
-        // 啟動畫布：預設為空白，若瀏覽器有已儲存的佈局則自動載入
         window.onload = () => {
             loadLastTableColors();
-            const raw = localStorage.getItem('venueLayoutData');
-            if (raw) {
-                try {
-                    const data = JSON.parse(raw);
-                    elements = data.elements || [];
-                    elementCounter = data.elementCounter || { table: 1, pillar: 1, stage: 1, wall: 1 };
-                } catch (e) {
-                    elements = [];
-                }
-            }
             selectedId = null;
             renderElements();
         };
