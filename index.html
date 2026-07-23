@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>場地平面佈局規劃系統</title>
+    <!-- 引入匯出圖片與 PDF 所需套件 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --bg-color: #f4f6f9;
+            --panel-bg: #ffffff;
+            --border-color: #dcdfe6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: #333;
+            overflow: hidden;
+        }
+
+        /* 側邊控制面板 */
+        .sidebar {
+            width: 320px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            background: var(--primary-color);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #606266;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            background: #f0f7ff;
+        }
+
+        .btn-primary {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+            color: white;
+        }
+
+        .btn-success {
+            background: #2ecc71;
+            color: white;
+            border: none;
+        }
+
+        .btn-success:hover {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+            border: none;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+            color: white;
+        }
+
+        /* 屬性編輯器 */
+        .property-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .form-group input, .form-group select {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* 主要畫布區域 */
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .top-bar {
+            height: 50px;
+            background: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            background-color: #eef2f5;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        #venue-stage {
+            width: 794px;
+            height: 1123px;
+            background: white;
+            border: 2px solid #94a3b8;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 畫布上的元件樣式 */
+        .element {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            cursor: move;
+            border: 2px solid #333;
+            box-sizing: border-box;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            transition: border-color 0.1s;
+        }
+
+        .element.selected {
+            border: 2px dashed #3498db !important;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.5);
+        }
+
+        /* 類型專屬樣式 */
+        .type-table-round {
+            border-radius: 50%;
+            background: #e3f2fd;
+            border-color: #1e88e5;
+            color: #0d47a1;
+        }
+
+        .type-table-rect {
+            border-radius: 4px;
+            background: #e8f5e9;
+            border-color: #43a047;
+            color: #1b5e20;
+        }
+
+        .type-pillar-square {
+            background: #475569;
+            border-color: #0f172a;
+            color: #ffffff;
+        }
+
+        .type-pillar-round {
+            border-radius: 50%;
+            background: #475569;
+            border-color: #0f172a;
+            color: #ffffff;
+        }
+
+        .type-stage {
+            background: #fef3c7;
+            border-color: #d97706;
+            color: #78350f;
+        }
+
+        .type-wall {
+            background: #94a3b8;
+            border-color: #475569;
+            color: #ffffff;
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 左側面板 -->
+    <div class="sidebar">
+        <div class="sidebar-header">🏛️ 場地配置工具</div>
+
+        <!-- 柱子類別（新增） -->
+        <div class="section">
+            <div class="section-title">🧱 柱子元件（新增）</div>
+            <div class="btn-group">
+                <button class="btn" onclick="addElement('pillar-square')">⬛ 方柱</button>
+                <button class="btn" onclick="addElement('pillar-round')">⚪ 圓柱</button>
+            </div>
+        </div>
+
+        <!-- 桌子類別（無人數） -->
+        <div class="section">
+            <div class="section-title">🍽️ 桌子元件（不含人數）</div>
+            <div class="btn-group">
+                <button class="btn" onclick="addElement('table-round')">⭕ 圓桌</button>
+                <button class="btn" onclick="addElement('table-rect')">⏹️ 長/方桌</button>
+            </div>
+        </div>
+
+        <!-- 其他元件 -->
+        <div class="section">
+            <div class="section-title">🎭 其他場地元件</div>
+            <div class="btn-group">
+                <button class="btn" onclick="addElement('stage')">🎪 舞台</button>
+                <button class="btn" onclick="addElement('wall')">🧱 屏風/牆面</button>
+            </div>
+        </div>
+
+        <!-- 屬性編輯器 -->
+        <div class="section" id="inspector" style="flex:1; overflow-y:auto;">
+            <div class="section-title">⚙️ 元件屬性設定</div>
+            <div id="no-selection" style="color:#999; font-size:13px; text-align:center; padding:20px 0;">
+                請點擊畫布上的元件進行編輯
+            </div>
+            <div id="property-editor" class="property-form" style="display:none;">
+                <div class="form-group">
+                    <label>名稱 / 編號</label>
+                    <input type="text" id="prop-label" oninput="updateSelectedElement()">
+                </div>
+                <div class="form-group">
+                    <label>寬度 / 直徑 (px)</label>
+                    <input type="number" id="prop-width" min="20" max="400" oninput="updateSelectedElement()">
+                </div>
+                <div class="form-group">
+                    <label>長度 / 高度 (px)</label>
+                    <input type="number" id="prop-height" min="20" max="400" oninput="updateSelectedElement()">
+                </div>
+                <div class="form-group">
+                    <label>旋轉角度 (度)</label>
+                    <input type="number" id="prop-rotate" min="0" max="360" value="0" oninput="updateSelectedElement()">
+                </div>
+                <button class="btn btn-danger" style="margin-top:10px;" onclick="deleteSelectedElement()">🗑️ 刪除元件</button>
+            </div>
+        </div>
+
+        <!-- 儲存與載入 -->
+        <div class="section">
+            <div class="section-title">💾 佈局儲存</div>
+            <div class="btn-group">
+                <button class="btn btn-success" onclick="saveLayout()">💾 儲存佈局</button>
+                <button class="btn" onclick="loadLayout()">📂 載入佈局</button>
+            </div>
+        </div>
+
+        <!-- 匯出與儲存 -->
+        <div class="section">
+            <div class="section-title">📤 檔案匯出</div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="exportAsJPG()">🖼️ 匯出 JPG</button>
+                <button class="btn btn-success" onclick="exportAsPDF()">📄 匯出 PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主要畫布區 -->
+    <div class="main-container">
+        <div class="top-bar">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background:#475569;"></div> 柱子
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background:#e3f2fd; border:1px solid #1e88e5;"></div> 圓桌
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background:#e8f5e9; border:1px solid #43a047;"></div> 方桌
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background:#fef3c7; border:1px solid #d97706;"></div> 舞台
+                </div>
+            </div>
+            <button class="btn" onclick="clearCanvas()">🧹 清空畫布</button>
+        </div>
+
+        <div class="canvas-area">
+            <div id="venue-stage" onclick="deselectAll(event)">
+                <!-- 元件會動態插入至此 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const stage = document.getElementById('venue-stage');
+        let elements = [];
+        let selectedId = null;
+        let elementCounter = { table: 1, pillar: 1, stage: 1, wall: 1 };
+
+        // 新增元件
+        function addElement(type) {
+            const id = 'el_' + Date.now();
+            let newEl = {
+                id: id,
+                type: type,
+                x: 100 + (elements.length * 15) % 300,
+                y: 100 + (elements.length * 15) % 200,
+                width: 80,
+                height: 80,
+                rotate: 0,
+                label: ''
+            };
+
+            // 根據類型給予預設值與名稱（無人數）
+            if (type === 'pillar-square') {
+                newEl.label = '柱 ' + elementCounter.pillar++;
+                newEl.width = 60;
+                newEl.height = 60;
+            } else if (type === 'pillar-round') {
+                newEl.label = '圓柱 ' + elementCounter.pillar++;
+                newEl.width = 60;
+                newEl.height = 60;
+            } else if (type === 'table-round') {
+                newEl.label = '桌 ' + elementCounter.table++;
+                newEl.width = 90;
+                newEl.height = 90;
+            } else if (type === 'table-rect') {
+                newEl.label = '桌 ' + elementCounter.table++;
+                newEl.width = 120;
+                newEl.height = 70;
+            } else if (type === 'stage') {
+                newEl.label = '主舞台';
+                newEl.width = 300;
+                newEl.height = 100;
+            } else if (type === 'wall') {
+                newEl.label = '屏風';
+                newEl.width = 150;
+                newEl.height = 20;
+            }
+
+            elements.push(newEl);
+            renderElements();
+            selectElement(id);
+        }
+
+        // 渲染畫布元件
+        function renderElements() {
+            stage.innerHTML = '';
+            elements.forEach(item => {
+                const el = document.createElement('div');
+                el.className = `element type-${item.type} ${item.id === selectedId ? 'selected' : ''}`;
+                el.id = item.id;
+                el.innerText = item.label;
+                
+                el.style.left = item.x + 'px';
+                el.style.top = item.y + 'px';
+                el.style.width = item.width + 'px';
+                el.style.height = item.height + 'px';
+                el.style.transform = `rotate(${item.rotate}deg)`;
+
+                // 綁定點擊事件與拖曳事件
+                el.addEventListener('mousedown', (e) => startDrag(e, item.id));
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectElement(item.id);
+                });
+
+                stage.appendChild(el);
+            });
+        }
+
+        // 拖曳邏輯
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        function startDrag(e, id) {
+            e.stopPropagation();
+            selectElement(id);
+            isDragging = true;
+            const item = elements.find(el => el.id === id);
+            dragOffset.x = e.clientX - item.x;
+            dragOffset.y = e.clientY - item.y;
+
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function onDrag(e) {
+            if (!isDragging || !selectedId) return;
+            const item = elements.find(el => el.id === selectedId);
+            if (item) {
+                // 限制在畫布範圍內
+                let newX = e.clientX - dragOffset.x;
+                let newY = e.clientY - dragOffset.y;
+
+                newX = Math.max(0, Math.min(stage.clientWidth - item.width, newX));
+                newY = Math.max(0, Math.min(stage.clientHeight - item.height, newY));
+
+                item.x = newX;
+                item.y = newY;
+                renderElements();
+            }
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        // 選擇與屬性更新
+        function selectElement(id) {
+            selectedId = id;
+            renderElements();
+            const item = elements.find(el => el.id === id);
+
+            if (item) {
+                document.getElementById('no-selection').style.display = 'none';
+                document.getElementById('property-editor').style.display = 'flex';
+
+                document.getElementById('prop-label').value = item.label;
+                document.getElementById('prop-width').value = item.width;
+                document.getElementById('prop-height').value = item.height;
+                document.getElementById('prop-rotate').value = item.rotate || 0;
+            }
+        }
+
+        function deselectAll(e) {
+            if (e.target === stage) {
+                selectedId = null;
+                renderElements();
+                document.getElementById('no-selection').style.display = 'block';
+                document.getElementById('property-editor').style.display = 'none';
+            }
+        }
+
+        function updateSelectedElement() {
+            if (!selectedId) return;
+            const item = elements.find(el => el.id === selectedId);
+            if (item) {
+                item.label = document.getElementById('prop-label').value;
+                item.width = parseInt(document.getElementById('prop-width').value) || 40;
+                item.height = parseInt(document.getElementById('prop-height').value) || 40;
+                item.rotate = parseInt(document.getElementById('prop-rotate').value) || 0;
+                renderElements();
+            }
+        }
+
+        function deleteSelectedElement() {
+            if (!selectedId) return;
+            elements = elements.filter(el => el.id !== selectedId);
+            selectedId = null;
+            renderElements();
+            document.getElementById('no-selection').style.display = 'block';
+            document.getElementById('property-editor').style.display = 'none';
+        }
+
+        function clearCanvas() {
+            if (confirm('確定要清空所有場地位件嗎？')) {
+                elements = [];
+                selectedId = null;
+                renderElements();
+                document.getElementById('no-selection').style.display = 'block';
+                document.getElementById('property-editor').style.display = 'none';
+            }
+        }
+
+        // 💾 儲存佈局功能（存入瀏覽器 localStorage）
+        function saveLayout() {
+            try {
+                const data = { elements, elementCounter, savedAt: new Date().toISOString() };
+                localStorage.setItem('venueLayoutData', JSON.stringify(data));
+                alert('✅ 佈局已儲存！下次開啟此頁面時會自動載入。');
+            } catch (e) {
+                alert('❌ 儲存失敗：' + e.message);
+            }
+        }
+
+        // 📂 載入已儲存的佈局
+        function loadLayout() {
+            const raw = localStorage.getItem('venueLayoutData');
+            if (!raw) {
+                alert('⚠️ 目前尚無已儲存的佈局');
+                return;
+            }
+            try {
+                const data = JSON.parse(raw);
+                elements = data.elements || [];
+                elementCounter = data.elementCounter || { table: 1, pillar: 1, stage: 1, wall: 1 };
+                selectedId = null;
+                renderElements();
+                document.getElementById('property-editor').style.display = 'none';
+                alert('✅ 已載入儲存的佈局！');
+            } catch (e) {
+                alert('❌ 載入失敗：' + e.message);
+            }
+        }
+
+        // 🖼️ 匯出 JPG 功能
+        function exportAsJPG() {
+            // 先取消選取狀態以防選取框一同導出
+            const prevSelected = selectedId;
+            selectedId = null;
+            renderElements();
+
+            html2canvas(stage, { scale: 2 }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `場地佈局圖_${new Date().toISOString().slice(0,10)}.jpg`;
+                link.href = canvas.toDataURL('image/jpeg', 0.9);
+                link.click();
+
+                // 還原選取
+                selectedId = prevSelected;
+                renderElements();
+            });
+        }
+
+        // 📄 匯出 PDF 功能
+        function exportAsPDF() {
+            const prevSelected = selectedId;
+            selectedId = null;
+            renderElements();
+
+            html2canvas(stage, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                const { jsPDF } = window.jspdf;
+                
+                // 建立 A4 直式文件
+                const pdf = new jsPDF('portrait', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+
+                // 計算圖片等比例縮放居中
+                const imgWidth = pdfWidth - 20; // 左右留白 10mm
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                pdf.setFontSize(16);
+                pdf.text("場地平面配置圖", 10, 15);
+                pdf.addImage(imgData, 'JPEG', 10, 25, imgWidth, imgHeight);
+                
+                pdf.save(`場地佈局圖_${new Date().toISOString().slice(0,10)}.pdf`);
+
+                selectedId = prevSelected;
+                renderElements();
+            });
+        }
+
+        // 啟動畫布：預設為空白，若瀏覽器有已儲存的佈局則自動載入
+        window.onload = () => {
+            const raw = localStorage.getItem('venueLayoutData');
+            if (raw) {
+                try {
+                    const data = JSON.parse(raw);
+                    elements = data.elements || [];
+                    elementCounter = data.elementCounter || { table: 1, pillar: 1, stage: 1, wall: 1 };
+                } catch (e) {
+                    elements = [];
+                }
+            }
+            selectedId = null;
+            renderElements();
+        };
+    </script>
+</body>
+</html>
