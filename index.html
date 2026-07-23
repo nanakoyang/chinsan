@@ -175,7 +175,7 @@
             background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
             background-size: 20px 20px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             padding: 40px;
         }
@@ -322,6 +322,10 @@
                     <label>長度 / 高度 (px)</label>
                     <input type="number" id="prop-height" min="20" max="400" oninput="updateSelectedElement()">
                 </div>
+                <div class="form-group" id="prop-color-group" style="display:none;">
+                    <label>顏色</label>
+                    <input type="color" id="prop-color" oninput="updateSelectedElement()" style="width:100%; height:36px; padding:2px; cursor:pointer;">
+                </div>
                 <div class="form-group">
                     <label>旋轉角度 (度)</label>
                     <input type="number" id="prop-rotate" min="0" max="360" value="0" oninput="updateSelectedElement()">
@@ -393,7 +397,8 @@
                 width: 80,
                 height: 80,
                 rotate: 0,
-                label: ''
+                label: '',
+                color: null
             };
 
             // 根據類型給予預設值與名稱（無人數）
@@ -409,10 +414,12 @@
                 newEl.label = '桌 ' + elementCounter.table++;
                 newEl.width = 90;
                 newEl.height = 90;
+                newEl.color = '#e3f2fd';
             } else if (type === 'table-rect') {
                 newEl.label = '桌 ' + elementCounter.table++;
                 newEl.width = 120;
                 newEl.height = 70;
+                newEl.color = '#e8f5e9';
             } else if (type === 'stage') {
                 newEl.label = '主舞台';
                 newEl.width = 300;
@@ -426,6 +433,20 @@
             elements.push(newEl);
             renderElements();
             selectElement(id);
+        }
+
+        // 輔助函式：將 hex 顏色加深/加亮，用於自動產生邊框顏色
+        function shadeColor(hex, percent) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const num = parseInt(hex, 16);
+            let r = (num >> 16) + Math.round(255 * (percent / 100));
+            let g = ((num >> 8) & 0x00FF) + Math.round(255 * (percent / 100));
+            let b = (num & 0x0000FF) + Math.round(255 * (percent / 100));
+            r = Math.max(0, Math.min(255, r));
+            g = Math.max(0, Math.min(255, g));
+            b = Math.max(0, Math.min(255, b));
+            return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
         }
 
         // 渲染畫布元件
@@ -442,6 +463,12 @@
                 el.style.width = item.width + 'px';
                 el.style.height = item.height + 'px';
                 el.style.transform = `rotate(${item.rotate}deg)`;
+
+                // 若為桌子且有自訂顏色，套用自訂背景與邊框顏色
+                if (item.type.startsWith('table-') && item.color) {
+                    el.style.background = item.color;
+                    el.style.borderColor = shadeColor(item.color, -30);
+                }
 
                 // 綁定點擊事件與拖曳事件
                 el.addEventListener('mousedown', (e) => startDrag(e, item.id));
@@ -507,6 +534,15 @@
                 document.getElementById('prop-width').value = item.width;
                 document.getElementById('prop-height').value = item.height;
                 document.getElementById('prop-rotate').value = item.rotate || 0;
+
+                // 顏色設定僅限桌子類型顯示
+                const colorGroup = document.getElementById('prop-color-group');
+                if (item.type.startsWith('table-')) {
+                    colorGroup.style.display = 'block';
+                    document.getElementById('prop-color').value = item.color || '#e3f2fd';
+                } else {
+                    colorGroup.style.display = 'none';
+                }
             }
         }
 
@@ -527,6 +563,9 @@
                 item.width = parseInt(document.getElementById('prop-width').value) || 40;
                 item.height = parseInt(document.getElementById('prop-height').value) || 40;
                 item.rotate = parseInt(document.getElementById('prop-rotate').value) || 0;
+                if (item.type.startsWith('table-')) {
+                    item.color = document.getElementById('prop-color').value;
+                }
                 renderElements();
             }
         }
