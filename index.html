@@ -40,6 +40,21 @@
             flex-direction: column;
             z-index: 10;
             box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* 讓捲軸更明顯好操作 */
+        .sidebar::-webkit-scrollbar {
+            width: 10px;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #c3c9d1;
+            border-radius: 5px;
+        }
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: #a8afb9;
         }
 
         .sidebar-header {
@@ -51,8 +66,13 @@
         }
 
         .section {
-            padding: 16px;
+            padding: 18px 16px;
             border-bottom: 1px solid var(--border-color);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+            padding-bottom: 28px;
         }
 
         .section-title {
@@ -268,6 +288,27 @@
             height: 14px;
             border-radius: 3px;
         }
+
+        /* 小螢幕 / 窄視窗：面板改上下堆疊，兩區各自可捲動 */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                height: 100vh;
+            }
+            .sidebar {
+                width: 100%;
+                height: 42vh;
+                border-right: none;
+                border-bottom: 2px solid var(--border-color);
+            }
+            .main-container {
+                flex: 1;
+                min-height: 0;
+            }
+            .canvas-area {
+                padding: 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -307,7 +348,7 @@
         </div>
 
         <!-- 屬性編輯器 -->
-        <div class="section" id="inspector" style="flex:1; overflow-y:auto;">
+        <div class="section" id="inspector">
             <div class="section-title">⚙️ 元件屬性設定</div>
             <div id="no-selection" style="color:#999; font-size:13px; text-align:center; padding:20px 0;">
                 請點擊畫布上的元件進行編輯
@@ -333,11 +374,11 @@
                     <label>旋轉角度 (度)</label>
                     <input type="number" id="prop-rotate" min="0" max="360" value="0" oninput="updateSelectedElement()">
                 </div>
-                <div class="btn-group" style="margin-top:10px;">
+                <div class="btn-group" style="margin-top:14px;">
                     <button class="btn" onclick="copySelectedElement()">📋 複製</button>
                     <button class="btn" onclick="pasteElement()">📄 貼上</button>
                 </div>
-                <button class="btn btn-danger" style="margin-top:10px;" onclick="deleteSelectedElement()">🗑️ 刪除元件</button>
+                <button class="btn btn-danger" style="margin-top:14px; margin-bottom:4px;" onclick="deleteSelectedElement()">🗑️ 刪除元件</button>
             </div>
         </div>
 
@@ -704,6 +745,7 @@
                         selectedId = null;
                         renderElements();
                         document.getElementById('property-editor').style.display = 'none';
+                        document.getElementById('no-selection').style.display = 'block';
                         alert('✅ 成功載入 JSON 佈局檔案！');
                     } else {
                         alert('❌ JSON 檔案格式不符合佈局規範');
